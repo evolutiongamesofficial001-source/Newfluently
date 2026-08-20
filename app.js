@@ -7,7 +7,7 @@
 
 // ── CONFIG ───────────────────────────────────────────────────────────
 const FIREBASE_URL = 'https://textos-67d4c-default-rtdb.firebaseio.com';
-const GROQ_MODEL   = 'llama-3.3-70b-versatile';
+const GROQ_MODEL   = 'openai/gpt-oss-120b';
 
 // ⚠️ TESTE: coloque sua chave Groq aqui ou ela será pedida via modal
 function rot13(str){
