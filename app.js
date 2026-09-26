@@ -485,10 +485,10 @@ function addError(tag) {
 }
 
 // ── GROQ AI ───────────────────────────────────────────────────────────
-async function groqChat(messages, systemPrompt) {
+async function groqChat(messages, systemPrompt, maxTokens = 2000) {
   const body = {
     model: GROQ_MODEL,
-    max_tokens: 800,
+    max_tokens: maxTokens,
     messages: [
       { role: 'system', content: systemPrompt },
       ...messages,
@@ -653,8 +653,7 @@ async function loadPhraseOfDay(courses) {
       [{ role: 'user', content: `Dê UMA frase curta e útil do dia a dia em ${langName(langId)}, nível ${level}, com sua tradução em ${explainLang}. Retorne APENAS JSON: {"phrase":"frase no idioma","translation":"tradução"}` }],
       'Você é um gerador de "frase do dia" para estudantes de idiomas. Retorne apenas JSON puro, sem markdown.'
     );
-    const clean = raw.replace(/```json|```/g, '').trim();
-    const { phrase, translation } = JSON.parse(clean);
+    const { phrase, translation } = extractJSON(raw);
     localStorage.setItem(cacheKey, JSON.stringify({ phrase, translation }));
     renderPhraseOfDay(langId, phrase, translation);
   } catch (e) {
@@ -669,8 +668,8 @@ function renderPhraseOfDay(langId, phrase, translation) {
   if (!card) return;
   card.classList.remove('hidden');
   document.getElementById('pod-lang').textContent = `— ${langName(langId)}`;
-  document.getElementById('pod-phrase').textContent = phrase;
-  document.getElementById('pod-translation').textContent = translation;
+  document.getElementById('pod-phrase').innerHTML = escHtml(phrase);
+  document.getElementById('pod-translation').innerHTML = escHtml(translation);
 }
 
 // ── RENDER COURSES ────────────────────────────────────────────────────
@@ -1062,7 +1061,9 @@ A aula DEVE conter obrigatoriamente estas seções:
 Seja claro e use exemplos do dia a dia.${avoidBlock}${repeatNote}`;
 
   try {
-    const result = await groqChat([{ role: 'user', content: userPrompt }], systemPrompt);
+    const depthTokens = { rapida: 1600, padrao: 2600, detalhada: 4200 };
+    const lessonMaxTokens = depthTokens[depthKey] || 2600;
+    const result = await groqChat([{ role: 'user', content: userPrompt }], systemPrompt, lessonMaxTokens);
     renderLesson(result, lang, topicLabel, level, langId);
     addXP(20);
     addCourseXP(langId, 20);
@@ -1211,9 +1212,9 @@ Retorne APENAS JSON válido, sem markdown, neste formato exato:
 
       try {
         const raw = await groqChat([{role:'user',content:prompt}],
-          `Você é um gerador de flash cards. Retorne apenas JSON puro, sem texto adicional, sem blocos de código.`);
-        const clean = raw.replace(/```json|```/g,'').trim();
-        const cards = JSON.parse(clean);
+          `Você é um gerador de flash cards. Retorne apenas JSON puro, sem texto adicional, sem blocos de código.`,
+          2200);
+        const cards = extractJSON(raw);
         renderFlashCards(cards, langId);
       } catch(e) {
         area.innerHTML = `<div class="empty-state"><p>Erro ao gerar cards: ${e.message}</p></div>`;
@@ -1241,9 +1242,9 @@ O campo correct é o índice (0-3) da resposta correta.`;
 
       try {
         const raw = await groqChat([{role:'user',content:prompt}],
-          `Você é um gerador de quizzes. Retorne apenas JSON puro sem markdown nem texto extra.`);
-        const clean = raw.replace(/```json|```/g,'').trim();
-        const questions = JSON.parse(clean);
+          `Você é um gerador de quizzes. Retorne apenas JSON puro sem markdown nem texto extra.`,
+          2500);
+        const questions = extractJSON(raw);
         renderQuiz(questions, langId);
       } catch(e) {
         area.innerHTML = `<div class="empty-state"><p>Erro ao gerar quiz: ${e.message}</p></div>`;
@@ -1270,9 +1271,9 @@ Retorne APENAS JSON válido:
 
       try {
         const raw = await groqChat([{role:'user',content:prompt}],
-          `Você é um gerador de exercícios fill-in-the-blank. Retorne apenas JSON puro sem markdown.`);
-        const clean = raw.replace(/```json|```/g,'').trim();
-        const items = JSON.parse(clean);
+          `Você é um gerador de exercícios fill-in-the-blank. Retorne apenas JSON puro sem markdown.`,
+          1800);
+        const items = extractJSON(raw);
         renderFillBlank(items, langId);
       } catch(e) {
         area.innerHTML = `<div class="empty-state"><p>Erro: ${e.message}</p></div>`;
@@ -1299,9 +1300,9 @@ Retorne APENAS JSON válido:
 
       try {
         const raw = await groqChat([{role:'user',content:prompt}],
-          `Você é um gerador de pares de vocabulário. Retorne apenas JSON puro sem markdown.`);
-        const clean = raw.replace(/```json|```/g,'').trim();
-        const pairs = JSON.parse(clean);
+          `Você é um gerador de pares de vocabulário. Retorne apenas JSON puro sem markdown.`,
+          1600);
+        const pairs = extractJSON(raw);
         renderMemoryGame(pairs, langId);
       } catch(e) {
         area.innerHTML = `<div class="empty-state"><p>Erro: ${e.message}</p></div>`;
@@ -1328,9 +1329,9 @@ Retorne APENAS JSON válido:
 
       try {
         const raw = await groqChat([{role:'user',content:prompt}],
-          `Você é um gerador de frases para jogo de ordenar palavras. Retorne apenas JSON puro sem markdown.`);
-        const clean = raw.replace(/```json|```/g,'').trim();
-        const items = JSON.parse(clean);
+          `Você é um gerador de frases para jogo de ordenar palavras. Retorne apenas JSON puro sem markdown.`,
+          1800);
+        const items = extractJSON(raw);
         renderUnscramble(items, langId);
       } catch(e) {
         area.innerHTML = `<div class="empty-state"><p>Erro: ${e.message}</p></div>`;
@@ -1357,9 +1358,9 @@ Retorne APENAS JSON válido:
 
       try {
         const raw = await groqChat([{role:'user',content:prompt}],
-          `Você é um gerador de afirmações verdadeiro/falso sobre idiomas. Retorne apenas JSON puro sem markdown.`);
-        const clean = raw.replace(/```json|```/g,'').trim();
-        const items = JSON.parse(clean);
+          `Você é um gerador de afirmações verdadeiro/falso sobre idiomas. Retorne apenas JSON puro sem markdown.`,
+          2200);
+        const items = extractJSON(raw);
         renderTrueFalse(items, langId);
       } catch(e) {
         area.innerHTML = `<div class="empty-state"><p>Erro: ${e.message}</p></div>`;
@@ -1387,9 +1388,9 @@ O campo oddIndex é o índice (0-3) da palavra intrusa.`;
 
       try {
         const raw = await groqChat([{role:'user',content:prompt}],
-          `Você é um gerador de jogos "intruso" de vocabulário. Retorne apenas JSON puro sem markdown.`);
-        const clean = raw.replace(/```json|```/g,'').trim();
-        const items = JSON.parse(clean);
+          `Você é um gerador de jogos "intruso" de vocabulário. Retorne apenas JSON puro sem markdown.`,
+          2200);
+        const items = extractJSON(raw);
         renderOddOne(items, langId);
       } catch(e) {
         area.innerHTML = `<div class="empty-state"><p>Erro: ${e.message}</p></div>`;
@@ -1417,9 +1418,9 @@ O campo correct é o índice (0-3) da resposta correta.`;
 
       try {
         const raw = await groqChat([{role:'user',content:prompt}],
-          `Você é um gerador de exercícios de sinônimos e antônimos. Retorne apenas JSON puro sem markdown nem texto extra.`);
-        const clean = raw.replace(/```json|```/g,'').trim();
-        const questions = JSON.parse(clean);
+          `Você é um gerador de exercícios de sinônimos e antônimos. Retorne apenas JSON puro sem markdown nem texto extra.`,
+          2500);
+        const questions = extractJSON(raw);
         renderQuiz(questions, langId, 'synonyms');
       } catch(e) {
         area.innerHTML = `<div class="empty-state"><p>Erro ao gerar jogo: ${e.message}</p></div>`;
@@ -1447,9 +1448,9 @@ O campo correct é o índice (0-3) da resposta correta.`;
 
       try {
         const raw = await groqChat([{role:'user',content:prompt}],
-          `Você é um gerador de exercícios de conjugação verbal. Retorne apenas JSON puro sem markdown nem texto extra.`);
-        const clean = raw.replace(/```json|```/g,'').trim();
-        const questions = JSON.parse(clean);
+          `Você é um gerador de exercícios de conjugação verbal. Retorne apenas JSON puro sem markdown nem texto extra.`,
+          2500);
+        const questions = extractJSON(raw);
         renderQuiz(questions, langId, 'conjugation');
       } catch(e) {
         area.innerHTML = `<div class="empty-state"><p>Erro ao gerar jogo: ${e.message}</p></div>`;
@@ -1477,9 +1478,9 @@ O campo correct é o índice (0-3) da frase ERRADA.`;
 
       try {
         const raw = await groqChat([{role:'user',content:prompt}],
-          `Você é um gerador de exercícios de detecção de erros gramaticais. Retorne apenas JSON puro sem markdown nem texto extra.`);
-        const clean = raw.replace(/```json|```/g,'').trim();
-        const questions = JSON.parse(clean);
+          `Você é um gerador de exercícios de detecção de erros gramaticais. Retorne apenas JSON puro sem markdown nem texto extra.`,
+          2800);
+        const questions = extractJSON(raw);
         renderQuiz(questions, langId, 'granddetective');
       } catch(e) {
         area.innerHTML = `<div class="empty-state"><p>Erro ao gerar jogo: ${e.message}</p></div>`;
@@ -1507,9 +1508,9 @@ O campo correct é o índice (0-3) da resposta correta.`;
 
       try {
         const raw = await groqChat([{role:'user',content:prompt}],
-          `Você é um gerador de exercícios de tradução rápida. Retorne apenas JSON puro sem markdown nem texto extra.`);
-        const clean = raw.replace(/```json|```/g,'').trim();
-        const questions = JSON.parse(clean);
+          `Você é um gerador de exercícios de tradução rápida. Retorne apenas JSON puro sem markdown nem texto extra.`,
+          2500);
+        const questions = extractJSON(raw);
         renderQuiz(questions, langId, 'speedtranslate');
       } catch(e) {
         area.innerHTML = `<div class="empty-state"><p>Erro ao gerar jogo: ${e.message}</p></div>`;
@@ -1537,9 +1538,9 @@ O campo correct é o índice (0-3) da resposta correta.`;
 
       try {
         const raw = await groqChat([{role:'user',content:prompt}],
-          `Você é um gerador de exercícios de diálogos contextuais. Retorne apenas JSON puro sem markdown nem texto extra.`);
-        const clean = raw.replace(/```json|```/g,'').trim();
-        const questions = JSON.parse(clean);
+          `Você é um gerador de exercícios de diálogos contextuais. Retorne apenas JSON puro sem markdown nem texto extra.`,
+          2800);
+        const questions = extractJSON(raw);
         renderQuiz(questions, langId, 'dialogue');
       } catch(e) {
         area.innerHTML = `<div class="empty-state"><p>Erro ao gerar jogo: ${e.message}</p></div>`;
@@ -1563,12 +1564,12 @@ function renderFlashCards(cards, langId) {
         <div class="flashcard" id="flashcard">
           <div class="flashcard-front">
             <div class="fc-label">Qual a tradução?</div>
-            <div class="fc-word">${c.word}</div>
+            <div class="fc-word">${escHtml(c.word)}</div>
             <div class="fc-hint">Clique para revelar</div>
           </div>
           <div class="flashcard-back">
-            <div class="fc-translation">${c.translation}</div>
-            <div class="fc-example">${c.example}</div>
+            <div class="fc-translation">${escHtml(c.translation)}</div>
+            <div class="fc-example">${escHtml(c.example)}</div>
           </div>
         </div>
       </div>
@@ -2024,14 +2025,16 @@ Retorne APENAS JSON válido, sem markdown, neste formato exato:
 O campo correct é o índice (0-3) da resposta correta. Retorne exatamente ${qCount} itens.`;
 
   try {
+    const examMaxTokens = Math.min(8000, 500 + qCount * 260);
     const raw = await groqChat([{role:'user',content:prompt}],
-      `Você é um gerador de provas de idiomas. Retorne apenas JSON puro sem markdown nem texto extra.`);
-    const clean = raw.replace(/```json|```/g,'').trim();
-    const questions = JSON.parse(clean);
+      `Você é um gerador de provas de idiomas. Retorne apenas JSON puro sem markdown nem texto extra.`,
+      examMaxTokens);
+    const questions = extractJSON(raw);
     currentExam = { langId, level, questions, answers: new Array(questions.length).fill(null), linkedTopic: linkedToLesson ? lastLesson.topicLabel : null };
     renderExam();
   } catch (e) {
-    area.innerHTML = `<div class="empty-state"><p>Erro ao gerar prova: ${e.message}</p></div>`;
+    area.innerHTML = `<div class="empty-state"><p>Erro ao gerar prova: ${e.message}</p>
+      <button class="btn-primary" style="width:auto;margin-top:14px" onclick="generateExam()">Tentar novamente 🔄</button></div>`;
   }
 }
 
@@ -2273,11 +2276,34 @@ async function textToSpeech(text, lang) {
 
 // ── UTILS ─────────────────────────────────────────────────────────────
 function escHtml(str) {
-  return String(str)
+  if (str === null || str === undefined) return '';
+  let s = String(str)
     .replace(/&/g,'&amp;')
     .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/\n/g,'<br>');
+    .replace(/>/g,'&gt;');
+  // **negrito** -> <strong>negrito</strong>
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // remove aspas retas e curvas que a IA costuma colocar em torno de palavras
+  s = s.replace(/["""„»«]/g, '');
+  s = s.replace(/\n/g,'<br>');
+  return s;
+}
+
+// Extrai e faz parse de um JSON (array ou objeto) a partir da resposta bruta da IA,
+// mesmo que tenha vindo com markdown/texto extra ao redor ou cortada por limite de tokens.
+function extractJSON(raw) {
+  let clean = String(raw).replace(/```json/gi, '').replace(/```/g, '').trim();
+  try {
+    return JSON.parse(clean);
+  } catch (e) {
+    const arrMatch = clean.match(/\[[\s\S]*\]/);
+    const objMatch = clean.match(/\{[\s\S]*\}/);
+    const candidate = arrMatch ? arrMatch[0] : (objMatch ? objMatch[0] : null);
+    if (candidate) {
+      try { return JSON.parse(candidate); } catch (e2) { /* segue para o erro abaixo */ }
+    }
+    throw new Error('A IA retornou uma resposta incompleta. Tente gerar novamente.');
+  }
 }
 
 function validate(name, email, password, age) {
